@@ -1,4 +1,5 @@
 import os
+import openai
 # import torch
 import chromadb
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageContext, PromptTemplate, get_response_synthesizer, Settings
@@ -12,11 +13,13 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.huggingface import HuggingFaceLLM
 from llama_index.postprocessor.cohere_rerank import CohereRerank
 from llama_index.llms.openai import OpenAI
+from IPython.display import Markdown, display
 from transformers import AutoTokenizer
 
 
 os.environ['OPENAI_API_KEY'] = 'sk-...'
-input_dir_path = '/Users/marmik/test'
+openai.api_key = os.environ['OPENAI_API_KEY']
+input_dir_path = '/Users/marmik/test/'
 cohere_api_key = '...'
 
 # loading the data
@@ -63,9 +66,9 @@ vector_index = VectorStoreIndex.from_documents(documents,
                                                show_progress = True)
 
 # load index from stored vectors
-vector_index = VectorStoreIndex.from_vector_store(vector_store, 
-                                                  embed_model=embed_model,
-                                                  storage_context = storage_context)
+# vector_index = VectorStoreIndex.from_vector_store(vector_store, 
+#                                                   embed_model=embed_model,
+#                                                   storage_context = storage_context)
 
 
 # tokenizer model
@@ -104,10 +107,10 @@ llm = OpenAI(model="gpt-4o", temperature=0.5, max_tokens=256)
 Settings.llm = llm
 
 # configure retriever
-retriever = VectorIndexRetriever(
-    index= vector_index,
-    similarity_top_k = 10
-)
+# retriever = VectorIndexRetriever(
+#     index= vector_index,
+#     similarity_top_k = 10
+# )
 
 # configure response synthesizer
 response_synthesizer = get_response_synthesizer(llm=Settings.llm,)
@@ -116,16 +119,18 @@ response_synthesizer = get_response_synthesizer(llm=Settings.llm,)
 reranker = CohereRerank(api_key = cohere_api_key, top_n = 3)
 
 # assemble query engine
-query_engine = RetrieverQueryEngine.from_args(
-    llm = llm,
-    retriever = retriever,
-    response_synthesizer=response_synthesizer,
-    node_postprocessors=[SimilarityPostprocessor(similarity_cutoff = 0.7), reranker],
-    streaming = True,
-    )
+# query_engine = RetrieverQueryEngine.from_args(
+#     llm = llm,
+#     retriever = retriever,
+#     response_synthesizer=response_synthesizer,
+#     node_postprocessors=[SimilarityPostprocessor(similarity_cutoff = 0.7), reranker],
+#     streaming = True,
+#     )
+
+query_engine = vector_index.as_query_engine(streaming=True)
 
 # a custom prompt template to refine responses from LLM
-qa_prompt_template_str = (
+qa_prompt_tmpl_str = (
             "Context information is below.\n"
             "---------------------\n"
             "{context_str}\n"
@@ -135,10 +140,11 @@ qa_prompt_template_str = (
             "Answer: "
             )
 
-qa_prompt_template = PromptTemplate(qa_prompt_template_str)
-query_engine.update_prompts({"response_synthesizer : text_qa_template" : qa_prompt_template})
+qa_prompt_tmpl = PromptTemplate(qa_prompt_tmpl_str)
 
-query_str = 'What is this paper about ?'
+query_engine.update_prompts({"response_synthesizer:text_qa_template" : qa_prompt_tmpl})
+
+query_str = 'What is the given paper about?'
 
 response = query_engine.query(query_str)
-print(response)
+print(str(response))
