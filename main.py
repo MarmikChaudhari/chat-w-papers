@@ -1,5 +1,5 @@
 import os
-import torch
+# import torch
 import chromadb
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageContext, PromptTemplate, get_response_synthesizer, Settings
 from llama_index.core.node_parser import SentenceSplitter, TokenTextSplitter
@@ -10,13 +10,19 @@ from llama_index.core.postprocessor import SimilarityPostprocessor
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.huggingface import HuggingFaceLLM
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from llama_index.postprocessor.cohere_rerank import CohereRerank
+from llama_index.llms.openai import OpenAI
+from transformers import AutoTokenizer
 
 
 os.environ['OPENAI_API_KEY'] = 'sk-...'
+input_dir_path = '/Users/marmik/test'
+cohere_api_key = '...'
 
 # loading the data
-documents = SimpleDirectoryReader('./data').load_data(show_progress=True)
+documents = SimpleDirectoryReader(input_dir = input_dir_path,
+                                  required_exts=['.pdf'],
+                                  recursive = True).load_data(show_progress=True)
 
 # custom transformations
 Settings.chunk_size = 512 
@@ -28,7 +34,9 @@ text_splitter = SentenceSplitter(chunk_size = Settings.chunk_size, chunk_overlap
 title_extractor = TitleExtractor(nodes=10)
 qa_extractor = QuestionsAnsweredExtractor(questions=5)
 
-embed_model = OpenAIEmbedding(model = 'text-embedding-3-large', embed_batch_size = 42)
+# embedding model
+embed_model = OpenAIEmbedding(model = 'text-embedding-3-large', embed_batch_size = 42,
+                              api_key = os.environ['OPENAI_API_KEY'])
 
 # global
 Settings.text_splitter = text_splitter
@@ -45,6 +53,7 @@ chroma_collection = db.get_or_create_collection('quickstart')
 # assign chroma as vector store in a StorageContext
 vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 storage_context = StorageContext.from_defaults(vector_store = vector_store)
+
 
 # create index
 vector_index = VectorStoreIndex.from_documents(documents, 
@@ -72,21 +81,25 @@ query_wrapper_prompt = PromptTemplate('<|USER|>{query_str}<|ASSISTANT|')
 
 system_prompt = 'You are a Q&A assistant. Your goal is to answer questions as accurately as possible based on the instructions and context provided.'
 
-# setting up the llm
-llm = HuggingFaceLLM(
-    context_window=8192,
-    max_new_tokens=256,
-    generate_kwargs={'temperature':0.7, 'do_sample':False},
-    system_prompt=system_prompt,
-    query_wrapper_prompt=query_wrapper_prompt,
-    tokenizer_name="meta-llama/Meta-Llama-3-8B-Instruct",
-    model_name="meta-llama/Meta-Llama-3-8B-Instruct",
-    device_map="auto",
-    stopping_ids=stopping_ids,
-    tokenizer_kwargs={'max_length':4096},
-    model_kwargs={'torch_dtype':torch.float16},
 
-)
+# setting up the llm
+
+llm = OpenAI(model="gpt-4o", temperature=0.5, max_tokens=256)
+
+# llm = HuggingFaceLLM(
+#     context_window = 8192,
+#     max_new_tokens = 256,
+#     generate_kwargs = {'temperature':0.7, 'do_sample':False},
+#     system_prompt=system_prompt,
+#     query_wrapper_prompt=query_wrapper_prompt,
+#     tokenizer_name="meta-llama/Meta-Llama-3-8B-Instruct",
+#     model_name="meta-llama/Meta-Llama-3-8B-Instruct",
+#     device_map="auto",
+#     stopping_ids=stopping_ids,
+#     tokenizer_kwargs={'max_length' : 4096},
+#     # model_kwargs={'torch_dtype' : torch.float16},
+
+# )
 
 Settings.llm = llm
 
@@ -97,15 +110,18 @@ retriever = VectorIndexRetriever(
 )
 
 # configure response synthesizer
-response_synthesizer = get_response_synthesizer()
+response_synthesizer = get_response_synthesizer(llm=Settings.llm,)
+
+# reranker model
+reranker = CohereRerank(api_key = cohere_api_key, top_n = 3)
 
 # assemble query engine
 query_engine = RetrieverQueryEngine.from_args(
     llm = llm,
     retriever = retriever,
     response_synthesizer=response_synthesizer,
-    node_postprocessors=[SimilarityPostprocessor(similarity_cutoff = 0.7)],
-    streaming = True
+    node_postprocessors=[SimilarityPostprocessor(similarity_cutoff = 0.7), reranker],
+    streaming = True,
     )
 
 # a custom prompt template to refine responses from LLM
@@ -121,3 +137,8 @@ qa_prompt_template_str = (
 
 qa_prompt_template = PromptTemplate(qa_prompt_template_str)
 query_engine.update_prompts({"response_synthesizer : text_qa_template" : qa_prompt_template})
+
+query_str = 'What is this paper about ?'
+
+response = query_engine.query(query_str)
+print(response)
