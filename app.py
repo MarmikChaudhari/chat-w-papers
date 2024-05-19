@@ -1,21 +1,17 @@
 import streamlit as st
 import uuid
-import random
-import time
 import tempfile
 import base64
 import gc
 import os
 import openai
 # import torch
-# import chromadb
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageContext, PromptTemplate, get_response_synthesizer, Settings
 from llama_index.core.node_parser import SentenceSplitter, TokenTextSplitter
 from llama_index.core.extractors import (TitleExtractor, QuestionsAnsweredExtractor)
 from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.postprocessor import SimilarityPostprocessor
-# from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.huggingface import HuggingFaceLLM
@@ -123,29 +119,11 @@ with st.sidebar :
                     Settings.text_splitter = text_splitter
                     Settings.embed_model = embed_model
 
-                    # storing the embeddings in a Vector Store
-
-                    # initalize the chroma client
-                    # db = chromadb.PersistentClient(path = './chroma_db')
-
-                    # create collection 
-                    # chroma_collection = db.get_or_create_collection('quickstart')
-
-                    # assign chroma as vector store in a StorageContext
-                    # vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
-                    # storage_context = StorageContext.from_defaults(vector_store = vector_store)
-
-
                     # create index
                     vector_index = VectorStoreIndex.from_documents(documents, 
                                                                 transformations = [text_splitter, title_extractor, qa_extractor],
                                                                 embed_model = embed_model,
                                                                 show_progress = True)
-
-                    # load index from stored vectors
-                    # vector_index = VectorStoreIndex.from_vector_store(vector_store, 
-                    #                                                   embed_model=embed_model,
-                    #                                                   storage_context = storage_context)
 
 
                     # tokenizer model
