@@ -8,14 +8,15 @@ import gc
 import os
 import openai
 # import torch
-import chromadb
+# import chromadb
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageContext, PromptTemplate, get_response_synthesizer, Settings
 from llama_index.core.node_parser import SentenceSplitter, TokenTextSplitter
 from llama_index.core.extractors import (TitleExtractor, QuestionsAnsweredExtractor)
 from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.postprocessor import SimilarityPostprocessor
-from llama_index.vector_stores.chroma import ChromaVectorStore
+# from llama_index.vector_stores.chroma import ChromaVectorStore
+from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.huggingface import HuggingFaceLLM
 from llama_index.postprocessor.cohere_rerank import CohereRerank
@@ -93,7 +94,7 @@ with st.sidebar :
                     if os.path.exists(temp_dir):
 
                         # loading the data
-                        documents = SimpleDirectoryReader(input_dir = input_dir_path,
+                        documents = SimpleDirectoryReader(input_dir = temp_dir,
                                                         required_exts=['.pdf'],
                                                         recursive = True).load_data(show_progress=True)
 
@@ -103,8 +104,6 @@ with st.sidebar :
                         st.stop()
 
                     # docs = documents.load_data()
-
-                    # THE MODEL CODE HERE
 
                     # custom transformations
                     Settings.chunk_size = 512 
@@ -127,20 +126,19 @@ with st.sidebar :
                     # storing the embeddings in a Vector Store
 
                     # initalize the chroma client
-                    db = chromadb.PersistentClient(path = './chroma_db')
+                    # db = chromadb.PersistentClient(path = './chroma_db')
 
                     # create collection 
-                    chroma_collection = db.get_or_create_collection('quickstart')
+                    # chroma_collection = db.get_or_create_collection('quickstart')
 
                     # assign chroma as vector store in a StorageContext
-                    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
-                    storage_context = StorageContext.from_defaults(vector_store = vector_store)
+                    # vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+                    # storage_context = StorageContext.from_defaults(vector_store = vector_store)
 
 
                     # create index
                     vector_index = VectorStoreIndex.from_documents(documents, 
                                                                 transformations = [text_splitter, title_extractor, qa_extractor],
-                                                                storage_context = storage_context,
                                                                 embed_model = embed_model,
                                                                 show_progress = True)
 
@@ -166,22 +164,24 @@ with st.sidebar :
 
                     # setting up the llm
 
-                    # llm = OpenAI(model="gpt-4o", temperature=0.5, max_tokens=256, tokenizer= tokenizer)
+                    llm = OpenAI(model="gpt-4o", temperature=0.5, max_tokens=256, tokenizer= tokenizer)
 
-                    llm = HuggingFaceLLM(
-                        context_window = 8192,
-                        max_new_tokens = 256,
-                        generate_kwargs = {'temperature':0.7, 'do_sample':False},
-                        system_prompt=system_prompt,
-                        query_wrapper_prompt=query_wrapper_prompt,
-                        tokenizer_name="meta-llama/Meta-Llama-3-8B-Instruct",
-                        model_name="meta-llama/Meta-Llama-3-8B-Instruct",
-                        device_map="auto",
-                        stopping_ids=stopping_ids,
-                        tokenizer_kwargs={'max_length' : 4096},
-                        # model_kwargs={'torch_dtype' : torch.float16},
+                    # llm = Ollama(model='llama3', request_timeout=120.0)
 
-                    )
+                    # llm = HuggingFaceLLM(
+                    #     context_window = 8192,
+                    #     max_new_tokens = 256,
+                    #     generate_kwargs = {'temperature':0.7, 'do_sample':False},
+                    #     system_prompt=system_prompt,
+                    #     query_wrapper_prompt=query_wrapper_prompt,
+                    #     tokenizer_name="meta-llama/Meta-Llama-3-8B-Instruct",
+                    #     model_name="meta-llama/Meta-Llama-3-8B-Instruct",
+                    #     device_map="auto",
+                    #     stopping_ids=stopping_ids,
+                    #     tokenizer_kwargs={'max_length' : 4096},
+                    #     # model_kwargs={'torch_dtype' : torch.float16},
+
+                    # )
 
                     Settings.llm = llm
 
